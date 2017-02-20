@@ -1,11 +1,13 @@
-port module DBMon exposing (..)
+module DBMon exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Lazy exposing (lazy)
-
-
-port setState : (List Database -> msg) -> Sub msg
+import Random exposing (Generator)
+import Dict exposing (Dict)
+import Time exposing (Time)
+import Task
+import Process
 
 
 main : Program Never Model Msg
@@ -13,18 +15,24 @@ main =
     Html.program
         { view = view
         , update = update
-        , init = ( initialModel, Cmd.none )
-        , subscriptions = \_ -> setState SetDatabases
+        , init = ( initialModel, Task.perform LoadSamples Time.now )
+        , subscriptions = \_ -> Sub.none
         }
 
 
 type alias Model =
-    { databases : List Database }
+    { databases : Dict String Database }
 
 
 type alias Database =
-    { name : String
-    , samples : List { queries : List Query, time : Float }
+    { samples : List Sample
+    , name : String
+    }
+
+
+type alias Sample =
+    { queries : List Query
+    , time : Time
     }
 
 
@@ -44,17 +52,21 @@ type alias Query =
 
 
 type Msg
-    = SetDatabases (List Database)
+    = LoadSamples Time
 
 
-initialModel : { databases : List a }
+initialModel : Model
 initialModel =
-    { databases = [] }
+    { databases = Dict.empty }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update (SetDatabases databases) model =
-    ( { model | databases = databases }, Cmd.none )
+update (LoadSamples time) model =
+    ( { model | databases = loadSamples time }
+    , Process.sleep timeout
+        |> Task.andThen (\_ -> Time.now)
+        |> Task.perform LoadSamples
+    )
 
 
 viewQuery : String -> Float -> Html msg
@@ -181,5 +193,114 @@ view : Model -> Html msg
 view model =
     div []
         [ table [ class "table table-striped latest-data" ]
-            [ tbody [] (List.map viewDatabase model.databases) ]
+            [ tbody [] (List.map viewDatabase (Dict.values model.databases)) ]
         ]
+
+
+rows : Int
+rows =
+    100
+
+
+timeout : Time
+timeout =
+    0
+
+
+addDatabaseHelp :
+    Time
+    -> Int
+    -> Dict String Database
+    -> Dict String Database
+addDatabaseHelp time index databases =
+    if index > 0 then
+        let
+            first =
+                { name = "cluster" ++ toString index, samples = [] }
+
+            second =
+                { name = "cluster" ++ toString index ++ "slave", samples = [] }
+        in
+            databases
+                |> Dict.insert first.name first
+                |> Dict.insert second.name second
+                |> addDatabaseHelp time (index - 1)
+    else
+        databases
+
+
+getData : Time -> Dict String Database
+getData time =
+    addDatabaseHelp time 100 Dict.empty
+
+
+queryGenerator : Generator Query
+queryGenerator =
+    Random.map3 makeQuery
+        (Random.float 0 15)
+        (Random.map ((==) 0) (Random.int 0 1))
+        queryStringGenerator
+
+
+queryStringGenerator : Generator String
+queryStringGenerator =
+    Random.int 0 100
+        |> Random.map
+            (\int ->
+                if int < 10 then
+                    "vacuum"
+                else if int < 22 then
+                    "<IDLE> in transaction"
+                else
+                    "SELECT blah FROM something"
+            )
+
+
+makeQuery : Float -> Bool -> String -> Query
+makeQuery elapsed isWaiting queryString =
+    { canvas_action = Nothing
+    , canvas_context_id = Nothing
+    , canvas_controller = Nothing
+    , canvas_hostname = Nothing
+    , canvas_job_tag = Nothing
+    , canvas_pid = Nothing
+    , elapsed = elapsed
+    , query = queryString
+    , waiting = isWaiting
+    }
+
+
+getRandomQueries : Generator (List Query)
+getRandomQueries =
+    Random.int 1 11
+        |> Random.andThen generateQueryList
+
+
+generateQueryList : Int -> Generator (List Query)
+generateQueryList length =
+    queryGenerator
+        |> Random.list length
+        |> Random.map (List.sortBy .elapsed)
+
+
+loadSamples : Time -> Dict String Database
+loadSamples time =
+    getData time
+
+
+thingdo :
+    String
+    -> Sample
+    -> Dict String Database
+    -> Time
+    -> List Sample
+thingdo dbname sampleInfo databases startAt =
+    let
+        samples =
+            databases
+                |> Dict.get dbname
+                |> Maybe.map .samples
+                |> Maybe.withDefault []
+    in
+        (samples ++ [ { time = startAt, queries = sampleInfo.queries } ])
+            |> List.take 5
