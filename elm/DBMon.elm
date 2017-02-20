@@ -2,6 +2,7 @@ port module DBMon exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Lazy exposing (lazy)
 
 
 port setState : (List Database -> msg) -> Sub msg
@@ -169,7 +170,7 @@ viewDatabase database =
         Just lastSample ->
             tr []
                 [ td [ class "dbname" ] [ text database.name ]
-                , sample lastSample.queries
+                , lazy sample lastSample.queries
                 ]
 
         Nothing ->
