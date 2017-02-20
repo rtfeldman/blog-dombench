@@ -210,28 +210,16 @@ timeout =
 addDatabaseHelp :
     Time
     -> Int
-    -> Dict String Database
-    -> Dict String Database
+    -> Dict String (List Sample)
+    -> Dict String (List Sample)
 addDatabaseHelp time index databases =
     if index > 0 then
-        let
-            first =
-                { name = "cluster" ++ toString index, samples = [] }
-
-            second =
-                { name = "cluster" ++ toString index ++ "slave", samples = [] }
-        in
-            databases
-                |> Dict.insert first.name first
-                |> Dict.insert second.name second
-                |> addDatabaseHelp time (index - 1)
+        databases
+            |> Dict.insert ("cluster" ++ toString index) []
+            |> Dict.insert ("cluster" ++ toString index ++ "slave") []
+            |> addDatabaseHelp time (index - 1)
     else
         databases
-
-
-getData : Time -> Dict String Database
-getData time =
-    addDatabaseHelp time 100 Dict.empty
 
 
 queryGenerator : Generator Query
@@ -283,9 +271,20 @@ generateQueryList length =
         |> Random.map (List.sortBy .elapsed)
 
 
+getData : Time -> Dict String (List Sample)
+getData time =
+    -- TODO incorporate randomness
+    addDatabaseHelp time 100 Dict.empty
+
+
 loadSamples : Time -> Dict String Database
 loadSamples time =
-    getData time
+    let
+        newData : Dict String (List Sample)
+        newData =
+            getData time
+    in
+        Dict.empty
 
 
 thingdo :
