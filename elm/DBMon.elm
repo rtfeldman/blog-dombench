@@ -62,7 +62,7 @@ initialModel =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update (LoadSamples time) model =
-    ( { model | databases = loadSamples time }
+    ( { model | databases = loadSamples time model.databases }
     , Process.sleep timeout
         |> Task.andThen (\_ -> Time.now)
         |> Task.perform LoadSamples
@@ -207,21 +207,6 @@ timeout =
     0
 
 
-addDatabaseHelp :
-    Time
-    -> Int
-    -> Dict String (List Sample)
-    -> Dict String (List Sample)
-addDatabaseHelp time index databases =
-    if index > 0 then
-        databases
-            |> Dict.insert ("cluster" ++ toString index) []
-            |> Dict.insert ("cluster" ++ toString index ++ "slave") []
-            |> addDatabaseHelp time (index - 1)
-    else
-        databases
-
-
 queryGenerator : Generator Query
 queryGenerator =
     Random.map3 makeQuery
@@ -271,35 +256,51 @@ generateQueryList length =
         |> Random.map (List.sortBy .elapsed)
 
 
-getData : Time -> Dict String (List Sample)
+getData : Time -> Dict String Sample
 getData time =
-    -- TODO incorporate randomness
-    addDatabaseHelp time 100 Dict.empty
-
-
-loadSamples : Time -> Dict String Database
-loadSamples time =
     let
-        newData : Dict String (List Sample)
-        newData =
-            getData time
+        emptySample =
+            { queries = []
+            , time = time
+            }
+
+        addSamples index samples =
+            if index > 0 then
+                samples
+                    |> Dict.insert ("cluster" ++ toString index) emptySample
+                    |> Dict.insert ("cluster" ++ toString index ++ "slave") emptySample
+                    |> addSamples (index - 1)
+            else
+                samples
     in
-        Dict.empty
+        -- TODO incorporate randomness
+        addSamples 100 Dict.empty
+
+
+loadSamples : Time -> Dict String Database -> Dict String Database
+loadSamples time databases =
+    getData time
+        |> Dict.map (thingdo databases time)
 
 
 thingdo :
-    String
-    -> Sample
-    -> Dict String Database
+    Dict String Database
     -> Time
-    -> List Sample
-thingdo dbname sampleInfo databases startAt =
+    -> String
+    -> Sample
+    -> Database
+thingdo databases startAt dbname sampleInfo =
     let
         samples =
             databases
                 |> Dict.get dbname
                 |> Maybe.map .samples
                 |> Maybe.withDefault []
+
+        newSamples =
+            (samples ++ [ { time = startAt, queries = sampleInfo.queries } ])
+                |> List.take 5
     in
-        (samples ++ [ { time = startAt, queries = sampleInfo.queries } ])
-            |> List.take 5
+        { samples = newSamples
+        , name = dbname
+        }
