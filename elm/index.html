@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="description" content="DBMON REACT" />
+  <meta charset="utf-8">
+  <link rel="stylesheet"
+        href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css"
+        integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ=="
+        crossorigin="anonymous">
+  <link href="style.css" rel="stylesheet" type="text/css" />
+  <title>dbmon (elm)</title>
+</head>
+<body>
+  <div id="dbmon"></div>
+
+  <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+  <script src="elm.js" type="text/javascript"></script>
+  <script src="loadSamples.js" type="text/javascript"></script>
+  <script type="text/javascript">
+    var start = Date.now();
+
+    var app = Elm.DBMon.embed(document.getElementById("dbmon"));
+
+    function setState(state) {
+      var dbs = Object.keys(state.databases).map(function(key) {
+        return state.databases[key];
+      });
+
+      app.ports.setState.send(dbs);
+    }
+
+    loadSamples();
+
+    console.log(Date.now() - start);
+  </script>
+</body>
+</html>
